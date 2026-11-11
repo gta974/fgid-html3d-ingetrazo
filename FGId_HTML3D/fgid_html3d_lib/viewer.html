@@ -1,0 +1,2128 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+      <title>@@title@@ - HTML3D</title>
+      <style>
+        :root {
+          --bg:#edf3f8;
+          --panel:rgba(255,255,255,.90);
+          --panel-soft:rgba(255,255,255,.86);
+          --text:#17212b;
+          --border:rgba(0,0,0,.18);
+          --hover:#ffffff;
+          --brand:rgba(20,35,50,.48);
+          --brand-hover:rgba(20,35,50,.82);
+        }
+        body.dark {
+          --bg:#161b22;
+          --panel:rgba(31,38,48,.94);
+          --panel-soft:rgba(31,38,48,.90);
+          --text:#e7edf4;
+          --border:rgba(255,255,255,.18);
+          --hover:#303946;
+          --brand:rgba(231,237,244,.55);
+          --brand-hover:rgba(255,255,255,.90);
+        }
+        html, body { margin:0; width:100%; height:100%; overflow:hidden; background:var(--bg); font-family:Arial, Helvetica, sans-serif; }
+        #viewer { position:fixed; inset:0; }
+        #toolbar { position:fixed; top:12px; left:12px; z-index:10; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        button { border:1px solid var(--border); background:var(--panel); color:var(--text); border-radius:8px; padding:8px 10px; cursor:pointer; font-size:13px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+        #toolbarToggle, #toolbarGrip { display:none; }
+        #toolbarGrip { touch-action:none; cursor:move; }
+        #tree, #settings, #scenesPanel, #annotationsPanel {
+          box-sizing:border-box; max-width:calc(100vw - 24px); overflow:auto;
+        }
+        @media (max-width: 700px), (max-height: 480px) {
+          #toolbar {
+            width:max-content; max-width:calc(100vw - 24px); max-height:38vh;
+            overflow:auto; gap:5px; overscroll-behavior:contain;
+          }
+          #toolbarToggle, #toolbarGrip { display:inline-block; }
+          #toolbar.collapsed > :not(#toolbarToggle):not(#toolbarGrip) { display:none; }
+        }
+        #renderMode {
+          border:1px solid var(--border);border-radius:8px;padding:8px 30px 8px 10px;
+          background-color:var(--panel);color:var(--text);font:13px Arial,sans-serif;
+          max-width:180px;height:34px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08);
+          appearance:none;
+          background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='m2 2 4 4 4-4' fill='none' stroke='%236b7280' stroke-width='1.5'/%3E%3C/svg%3E");
+          background-repeat:no-repeat;background-size:12px 8px;background-position:right 10px center;
+        }
+        #renderMode:hover { background-color:var(--hover); }
+        #renderMode:focus-visible { outline:2px solid #2d7dd2;outline-offset:2px; }
+        button:disabled { opacity:.65;cursor:default; }
+        button:hover { background:var(--hover); }
+        button.active { background:#2d7dd2; color:white; }
+        #settings { position:fixed; top:58px; right:12px; z-index:11; width:280px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:13px; color:var(--text); display:none; box-shadow:0 4px 18px rgba(0,0,0,.18); }
+        #settings h3 { margin:0 0 10px 0; font-size:14px; }
+        #settings label { display:flex; gap:8px; align-items:center; margin:8px 0; }
+        #tree { position:fixed; top:58px; left:12px; bottom:12px; width:320px; overflow:auto; z-index:9; background:var(--panel-soft); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:12px; color:var(--text); display:none; box-shadow:0 4px 18px rgba(0,0,0,.18); }
+        #tree ul { list-style:none; padding-left:16px; margin:4px 0; }
+        #tree li { padding:2px 0; white-space:nowrap; }
+        #tree .tree-row { display:flex; align-items:center; gap:6px; min-height:22px; }
+        #tree .tree-label { cursor:pointer; overflow:hidden; text-overflow:ellipsis; }
+        #tree .tree-label:hover { color:#2d7dd2; }
+        #tree .eye { border:0; background:transparent; box-shadow:none; padding:0; width:22px; min-width:22px; height:22px; border-radius:4px; font-size:15px; line-height:22px; }
+        #tree .eye:hover { background:rgba(127,127,127,.16); }
+        #tree .eye.hidden { opacity:.38; }
+        #scenesPanel, #annotationsPanel { position:fixed; top:58px; left:12px; z-index:11; width:320px; max-height:calc(100% - 82px); overflow:auto; background:var(--panel-soft); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:12px; color:var(--text); display:none; box-shadow:0 4px 18px rgba(0,0,0,.18); }
+        #annotationsPanel .ann-title { font-weight:700; margin:2px 2px 8px; font-size:13px; }
+        #annotationsPanel .ann-empty { opacity:.68; padding:8px 4px; }
+        #scenesPanel button, #annotationsPanel .ann-item { display:block; width:100%; text-align:left; margin:4px 0; padding:8px 9px; border-radius:7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; box-sizing:border-box; }
+        #scenesPanel button.active { font-weight:700; }
+        #scenesPanel button:not(.active):hover, #annotationsPanel .ann-item:hover { background:var(--hover); }
+        #brand { position:fixed; right:18px; bottom:14px; z-index:8; color:var(--brand); font-weight:700; letter-spacing:.08em; font-size:18px; text-decoration:none; }
+        #brand:hover { color:var(--brand-hover); }
+        #status { position:fixed; left:12px; bottom:12px; z-index:8; background:var(--panel-soft); padding:6px 9px; border-radius:8px; font-size:12px; color:var(--text); }
+        #loading { position:fixed; inset:0; z-index:1000; display:grid; place-content:center; justify-items:center; gap:18px; background:#08090b; color:#f5f6f8; text-align:center; }
+        #loading[hidden] { display:none; }
+        #loading-ring { position:relative; display:grid; place-items:center; width:138px; height:138px; font-size:26px; }
+        #loading-ring svg { position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg); }
+        #loading-progress { stroke-dasharray:100; stroke-dashoffset:100; }
+        #loading-message { font-size:18px; color:#d1d5db; max-width:32em; padding:0 1em; }
+      </style>
+      <script type="importmap">
+      {
+        "imports": {
+          "three": "data:text/javascript;base64,@@three_module_base64@@",
+          "three/addons/controls/OrbitControls.js": "data:text/javascript;base64,@@orbit_controls_base64@@"
+        }
+      }
+      </script>
+    </head>
+    <body>
+      <div id="loading">
+        <div id="loading-ring" role="progressbar" aria-label="Chargement du modèle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="44" fill="none" stroke="#42454b" stroke-width="8"/>
+            <circle id="loading-progress" cx="50" cy="50" r="44" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" pathLength="100"/>
+          </svg>
+          <span id="loading-percent">0 %</span>
+        </div>
+        <div id="loading-message" role="status">Chargement…</div>
+      </div>
+
+      <div id="viewer"></div>
+      <div id="toolbar" class="collapsed">
+        <button id="toolbarToggle" type="button" aria-expanded="false">Outils</button>
+        <button id="toolbarGrip" type="button" aria-label="Déplacer le bandeau" title="Déplacer le bandeau">↕</button>
+        <button id="btnEdges" class="active">Edges 30° ON</button>
+        <select id="renderMode" aria-label="Mode de rendu" title="Choisir le mode de rendu">
+            <option value="textures">Textures</option>
+            <option value="colors">Couleurs seules</option>
+            <option value="monochrome">Monochrome</option>
+            <option value="hiddenline">Lignes cachées</option>
+            <option value="wireframe">Filaire</option>
+            <option value="xray">Rayons X</option>
+            <option value="clay">Argile</option>
+            <option value="normals">Normales</option>
+        </select>
+        <button id="btnSpin">Auto spin</button>
+        <button id="btnTree">Tags</button>
+        <button id="btnAnnotations">Annotations</button>
+        <button id="btnScenes" type="button" aria-controls="scenesPanel" aria-expanded="false" hidden>Scènes</button>
+        <button id="btnPointCloud" style="display:none;">Point cloud ON</button>
+        <button id="btnTheme">Dark mode</button>
+        <button id="btnProjection">Parallel view</button>
+        <button id="btnSettings">Settings</button>
+        <button id="btnDefaultView" class="active">Default view</button>
+        <button id="btnIso">ISO view</button>
+        <button id="btnFront">Front view</button>
+        <button id="btnTop">Top view</button><button id="btnBottom">Bottom</button><button id="btnBack">Back</button><button id="btnLeft">Left</button><button id="btnRight">Right</button>
+        <button id="btnFit">Fit</button>
+      </div>
+      <div id="tree"></div>
+      <div id="annotationsPanel"></div>
+      <div id="scenesPanel" role="region" aria-label="Scènes exportées"></div>
+      <div id="settings">
+        <h3>Settings</h3>
+        <label><input type="checkbox" id="chkEdgesDefault"> Show edges by default</label>
+        <label id="plyPointSizeRow" style="display:none;">
+          Point cloud size
+          <input type="number" id="plyPointSize" value="@@ply_point_size_json@@" min="0.0005" max="1" step="0.001" style="width:80px;">
+        </label>
+        <div id="plyTransformPanel" style="display:none; margin-top:10px; border-top:1px solid var(--border); padding-top:8px;">
+          <div style="font-weight:700; margin-bottom:6px;">Point cloud transform</div>
+          <label>X <input id="plyTx" type="number" step="0.01" value="0" style="width:72px;"> m</label>
+          <label>Y <input id="plyTy" type="number" step="0.01" value="0" style="width:72px;"> m</label>
+          <label>Z <input id="plyTz" type="number" step="0.01" value="0" style="width:72px;"> m</label>
+          <label>RX <input id="plyRx" type="number" step="1" value="0" style="width:72px;"> °</label>
+          <label>RY <input id="plyRy" type="number" step="1" value="0" style="width:72px;"> °</label>
+          <label>RZ <input id="plyRz" type="number" step="1" value="0" style="width:72px;"> °</label>
+          <label>Scale <input id="plyScale" type="number" step="0.01" value="1" style="width:72px;"></label>
+          <button id="btnResetPlyTransform" type="button" style="margin-top:6px;">Reset extra transform</button>
+          <div style="font-size:11px; opacity:.7; margin-top:5px;">These values are additional adjustments on top of the exported PLY alignment.</div>
+        </div>
+        <div style="font-size:12px; opacity:.72; margin-top:8px;">Navigation: left click = V1 spin/orbit, right click = pan. Fit restores the default X+, Y+, Z+ view.</div>
+      </div>
+      <div id="status"></div>
+      <a id="brand" href="https://nexdata.tarn.us" target="_blank" rel="noopener noreferrer" title="NEXDATA">NEXDATA</a>
+
+      <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const EMBEDDED_GLB_BASE64 = '@@glb_base64@@';
+        const GLB_BYTES = @@glb_bytes_json@@;
+        const SKETCHUP_CAMERA = @@camera_json@@;
+        const EDGES_DEFAULT = @@edges_default_json@@;
+        const LOOSE_EDGE_POSITIONS = @@loose_edges_json@@;
+        const HAS_EMBEDDED_PLY = @@ply_present_json@@;
+        const EMBEDDED_PLY_BASE64 = '@@ply_base64@@';
+        const EMBEDDED_PLY_NAME = @@ply_name_json@@;
+        const PLY_TRANSFORM_MODE = @@ply_transform_mode_json@@;
+        const PLY_TRANSFORM_MATRIX = @@ply_transform_matrix_json@@;
+        const PLY_MANUAL_TRANSFORM = @@ply_manual_transform_json@@;
+        const PLY_POINT_SIZE_DEFAULT = @@ply_point_size_json@@;
+        const DARK_DEFAULT = @@dark_default_json@@;
+        const ANNOTATIONS = @@annotations_json@@;
+        const container = document.getElementById('viewer');
+        const scene = new THREE.Scene();
+        const LIGHT_BACKGROUND = 0xedf3f8;
+        const DARK_BACKGROUND = 0x161b22;
+        scene.background = new THREE.Color(DARK_DEFAULT ? DARK_BACKGROUND : LIGHT_BACKGROUND);
+
+        let camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000000);
+        let darkMode = DARK_DEFAULT;
+        let parallelMode = false;
+        const renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true, powerPreference:'high-performance', logarithmicDepthBuffer:true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        container.appendChild(renderer.domElement);
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x8fa4b8, 1.7));
+        const dir1 = new THREE.DirectionalLight(0xffffff, 2.0); dir1.position.set(4, 7, 5); scene.add(dir1);
+        const dir2 = new THREE.DirectionalLight(0xffffff, 0.8); dir2.position.set(-5, -3, -4); scene.add(dir2);
+
+        let controls = new OrbitControls(camera, renderer.domElement);
+        function configureControls() {
+          controls.enableDamping = false;
+          controls.rotateSpeed = 0.5;
+          controls.orbitUp.set(0, 1, 0);
+          controls.getOrbitPivot = pickOrbitPivot;
+          controls.dampingFactor = 0.08;
+          controls.screenSpacePanning = true;
+          controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+          controls.enablePan = true;
+          controls.addEventListener('change', () => { annotationOcclusionDirty = true; });
+        }
+        configureControls();
+        renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+        let root = null;
+        let edgesVisible = true;
+        const edgeObjects = [];
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selected = null;
+        let pointCloud = null;
+        let pointCloudVisible = true;
+
+        function orbitHitVisible(hit) {
+          if (!isEffectivelyVisible(hit.object)) return false;
+          const material = Array.isArray(hit.object.material)
+            ? hit.object.material[hit.face.materialIndex] : hit.object.material;
+          if (!material || !material.visible || material.opacity <= 0) return false;
+          const planes = material.clippingPlanes || [];
+          const clipped = plane => plane.distanceToPoint(hit.point) < -1e-6;
+          return !planes.length || !(material.clipIntersection
+            ? planes.every(clipped) : planes.some(clipped));
+        }
+
+        function rayBoxMidpoint(ray, box) {
+          if (box.isEmpty()) return null;
+          let enter = 0, exit = Infinity;
+          for (const axis of ['x', 'y', 'z']) {
+            const origin = ray.origin[axis], direction = ray.direction[axis];
+            if (Math.abs(direction) < 1e-12) {
+              if (origin < box.min[axis] || origin > box.max[axis]) return null;
+              continue;
+            }
+            const a = (box.min[axis] - origin) / direction;
+            const b = (box.max[axis] - origin) / direction;
+            enter = Math.max(enter, Math.min(a, b));
+            exit = Math.min(exit, Math.max(a, b));
+            if (exit < enter) return null;
+          }
+          return Number.isFinite(exit) ? ray.at((enter + exit) / 2, new THREE.Vector3()) : null;
+        }
+
+        function pickOrbitPivot(clientX, clientY) {
+          if (!root) return controls.target.clone();
+          const rect = renderer.domElement.getBoundingClientRect();
+          const cursor = new THREE.Vector2(
+            (clientX - rect.left) / rect.width * 2 - 1,
+            -(clientY - rect.top) / rect.height * 2 + 1
+          );
+          root.updateMatrixWorld(true);
+          camera.updateMatrixWorld(true);
+          const picker = new THREE.Raycaster();
+          picker.setFromCamera(cursor, camera);
+          const hit = picker.intersectObjects(modelOccluders, false).find(orbitHitVisible);
+          if (hit) return hit.point.clone();
+
+          const box = new THREE.Box3();
+          for (const mesh of modelOccluders) {
+            if (isEffectivelyVisible(mesh)) box.expandByObject(mesh);
+          }
+          if (pointCloud?.visible && pointCloud.geometry.index?.count !== 0) {
+            pointCloud.updateMatrixWorld(true);
+            const crop = pointCloud.userData.crop;
+            if (crop) {
+              const lo = crop.lower.value, hi = crop.upper.value;
+              box.union(new THREE.Box3(
+                new THREE.Vector3(lo.x, lo.z, -hi.y),
+                new THREE.Vector3(hi.x, hi.z, -lo.y)
+              ).applyMatrix4(pointCloud.matrixWorld));
+            } else {
+              pointCloud.geometry.computeBoundingBox();
+              box.union(pointCloud.geometry.boundingBox.clone().applyMatrix4(pointCloud.matrixWorld));
+            }
+          }
+          picker.setFromCamera(new THREE.Vector2(), camera);
+          return rayBoxMidpoint(picker.ray, box) || controls.target.clone();
+        }
+
+        function b64ToArrayBuffer(base64) {
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          return bytes.buffer;
+        }
+
+        const SPECIAL_NODE_PREFIX = '__FGID_COTES_3D__';
+        const ONEFACE_NODE_PREFIX = '__FGID_ONEFACE__';
+        const TOPLEVEL_TAG_PREFIX = '__FGID_TOPLEVEL_TAG__';
+
+        function cleanSpecialNodeNames(obj) {
+          obj.traverse(child => {
+            let name = child.name || '';
+
+            // Top-level tag marker may wrap another marker. Decode it first.
+            if (name.startsWith(TOPLEVEL_TAG_PREFIX)) {
+              const payload = name.substring(TOPLEVEL_TAG_PREFIX.length);
+              const separator = payload.indexOf('|');
+              if (separator >= 0) {
+                child.userData.__fgidTopLevelTag = payload.substring(0, separator) || 'Untagged';
+                child.userData.__fgidTopLevelRoot = true;
+                name = payload.substring(separator + 1);
+                child.name = name;
+              }
+            }
+
+            if (name.startsWith(SPECIAL_NODE_PREFIX)) {
+              child.name = name.substring(SPECIAL_NODE_PREFIX.length) || 'FGId_Cotes_3D';
+              child.userData.__fgidCotes3D = true;
+            } else if (name.startsWith(ONEFACE_NODE_PREFIX)) {
+              child.name = name.substring(ONEFACE_NODE_PREFIX.length) || 'oneface';
+              child.userData.__fgidOneFace = true;
+            }
+          });
+        }
+
+        function isSpecialCotesObject(obj) {
+          let current = obj;
+          while (current) {
+            if (current.userData && current.userData.__fgidCotes3D) return true;
+            current = current.parent;
+          }
+          return false;
+        }
+
+        function isOneFaceObject(obj) {
+          let current = obj;
+          while (current) {
+            if (current.userData && (current.userData.__fgidOneFace || (current.userData.fgid_tags||[]).some(t=>t.toLowerCase()==='oneface'))) return true;
+            current = current.parent;
+          }
+          return false;
+        }
+
+        function normalizeMaterials(obj) {
+          obj.traverse(child => {
+            if (!child.isMesh) return;
+            child.castShadow = true;
+            child.receiveShadow = true;
+            if (!child.material) return;
+
+            const specialCotes = isSpecialCotesObject(child);
+            const oneFace = isOneFaceObject(child) || (child.userData.fgid_tags||[]).some(t=>t.toLowerCase()==='oneface');
+            const frontOnly = specialCotes || oneFace;
+
+            // A glTF material can be shared by several meshes. Clone it before
+            // changing .side on a single-sided object so another object using
+            // the same material is not changed accidentally.
+            if (true) {
+              if (Array.isArray(child.material)) {
+                child.material = child.material.map(mat => mat.clone());
+              } else {
+                child.material = child.material.clone();
+              }
+            }
+
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(mat => {
+              // FGId_Cotes_3D and tag "oneface" are front-face only.
+              // Every other object remains double-sided.
+              mat.side = frontOnly ? THREE.FrontSide : THREE.DoubleSide;
+              if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+              if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+              mat.needsUpdate = true;
+            });
+          });
+        }
+
+        // Use the IngeTrazo viewport's fixed matte light on display RGB.
+        // A material subclass keeps the shader hook when a cut clones it.
+        class IngeTrazoMatteMaterial extends THREE.MeshStandardMaterial {
+          onBeforeCompile(shader) {
+            shader.fragmentShader = shader.fragmentShader.replace(
+              '#include <opaque_fragment>',
+              'outgoingLight = diffuseColor.rgb + totalEmissiveRadiance;\n#include <opaque_fragment>'
+            ).replace(
+              '#include <colorspace_fragment>',
+              `#include <colorspace_fragment>
+               vec3 lightingNormal = normalize(nonPerturbedNormal);
+               vec3 light = normalize(mat3(viewMatrix) * vec3(0.35, 1.0, -0.25));
+               float shade = 0.62 + 0.38 * abs(dot(lightingNormal, light));
+               gl_FragColor.rgb *= shade;`
+            );
+          }
+        }
+
+        function glbComponentArray(componentType, buffer, byteOffset, count) {
+          const map = {
+            5120: Int8Array, 5121: Uint8Array, 5122: Int16Array, 5123: Uint16Array,
+            5125: Uint32Array, 5126: Float32Array
+          };
+          const C = map[componentType];
+          if (!C) throw new Error(`Unsupported glTF component type ${componentType}`);
+          return new C(buffer, byteOffset, count);
+        }
+
+        function parseEmbeddedGLB(arrayBuffer) {
+          const dv = new DataView(arrayBuffer);
+          if (dv.getUint32(0, true) !== 0x46546c67) throw new Error('Invalid GLB magic');
+          if (dv.getUint32(4, true) !== 2) throw new Error('Only glTF 2.0 GLB is supported');
+          let offset = 12, json = null, bin = null;
+          while (offset + 8 <= arrayBuffer.byteLength) {
+            const len = dv.getUint32(offset, true);
+            const type = dv.getUint32(offset + 4, true);
+            const start = offset + 8;
+            if (type === 0x4E4F534A) json = JSON.parse(new TextDecoder().decode(new Uint8Array(arrayBuffer, start, len)).replace(/\u0000+$/g, '').trim());
+            if (type === 0x004E4942) bin = arrayBuffer.slice(start, start + len);
+            offset = start + len;
+          }
+          if (!json) throw new Error('GLB JSON chunk missing'); if(!bin)bin=new ArrayBuffer(0);
+
+          const componentBytes = {5120:1,5121:1,5122:2,5123:2,5125:4,5126:4};
+          const typeSize = {SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT2:4,MAT3:9,MAT4:16};
+          function accessorData(index) {
+            const a = json.accessors[index];
+            const bv = json.bufferViews[a.bufferView];
+            const n = typeSize[a.type];
+            const bytes = componentBytes[a.componentType];
+            const stride = bv.byteStride || n * bytes;
+            const base = (bv.byteOffset || 0) + (a.byteOffset || 0);
+            if (stride === n * bytes) {
+              return { array: glbComponentArray(a.componentType, bin, base, a.count * n), itemSize:n, normalized:!!a.normalized };
+            }
+            const src = new Uint8Array(bin);
+            const C = {5120:Int8Array,5121:Uint8Array,5122:Int16Array,5123:Uint16Array,5125:Uint32Array,5126:Float32Array}[a.componentType];
+            const out = new C(a.count * n);
+            const tmp = new DataView(bin);
+            const getters = {5120:'getInt8',5121:'getUint8',5122:'getInt16',5123:'getUint16',5125:'getUint32',5126:'getFloat32'};
+            for (let i=0;i<a.count;i++) for (let j=0;j<n;j++) out[i*n+j] = tmp[getters[a.componentType]](base+i*stride+j*bytes, true);
+            return {array:out,itemSize:n,normalized:!!a.normalized};
+          }
+
+          const imageUrls = (json.images || []).map(img => {
+            // GLB textures are normally stored in BIN bufferViews. Support data URI as a fallback.
+            if (img.bufferView !== undefined) {
+              const bv = json.bufferViews[img.bufferView];
+              const bytes = new Uint8Array(bin, bv.byteOffset || 0, bv.byteLength);
+              return URL.createObjectURL(new Blob([bytes], {type: img.mimeType || 'application/octet-stream'}));
+            }
+            if (typeof img.uri === 'string') return img.uri;
+            return null;
+          });
+
+          const textureCache = new Map();
+          const wrapMap = {
+            33071: THREE.ClampToEdgeWrapping,
+            33648: THREE.MirroredRepeatWrapping,
+            10497: THREE.RepeatWrapping
+          };
+          const filterMap = {
+            9728: THREE.NearestFilter,
+            9729: THREE.LinearFilter,
+            9984: THREE.NearestMipmapNearestFilter,
+            9985: THREE.LinearMipmapNearestFilter,
+            9986: THREE.NearestMipmapLinearFilter,
+            9987: THREE.LinearMipmapLinearFilter
+          };
+
+          function textureInfoKey(info, colorTexture) {
+            if (!info) return 'none';
+            const ext = info.extensions && info.extensions.KHR_texture_transform;
+            return JSON.stringify([info.index, info.texCoord || 0, ext || null, !!colorTexture]);
+          }
+
+          function getTexture(infoOrIndex, colorTexture = true) {
+            const info = (typeof infoOrIndex === 'number') ? {index: infoOrIndex} : infoOrIndex;
+            if (!info || info.index === undefined) return null;
+            const key = textureInfoKey(info, colorTexture);
+            if (textureCache.has(key)) return textureCache.get(key);
+
+            const td = (json.textures || [])[info.index];
+            if (!td) return null;
+            const sourceIndex = td.source !== undefined ? td.source : (td.extensions && td.extensions.EXT_texture_webp ? td.extensions.EXT_texture_webp.source : undefined);
+            const url = sourceIndex !== undefined ? imageUrls[sourceIndex] : null;
+            if (!url) return null;
+
+            const tex = new THREE.TextureLoader().load(
+              url,
+              t => { t.needsUpdate = true; if (renderMode === 'colors' || renderMode === 'xray') applyRenderMode(); },
+              undefined,
+              err => console.warn('HTML3D texture load warning:', err)
+            );
+            tex.flipY = false;
+            tex.colorSpace = colorTexture ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+
+            const sampler = (json.samplers || [])[td.sampler] || {};
+            tex.wrapS = wrapMap[sampler.wrapS] || THREE.RepeatWrapping;
+            tex.wrapT = wrapMap[sampler.wrapT] || THREE.RepeatWrapping;
+            if (sampler.magFilter) tex.magFilter = filterMap[sampler.magFilter] || THREE.LinearFilter;
+            if (sampler.minFilter) tex.minFilter = filterMap[sampler.minFilter] || THREE.LinearMipmapLinearFilter;
+
+            // glTF supports alternate UV sets and KHR_texture_transform.
+            tex.channel = Number(info.texCoord || 0);
+            const tr = info.extensions && info.extensions.KHR_texture_transform;
+            if (tr) {
+              if (Array.isArray(tr.offset)) tex.offset.set(Number(tr.offset[0]) || 0, Number(tr.offset[1]) || 0);
+              if (Array.isArray(tr.scale)) tex.repeat.set(Number(tr.scale[0]) || 1, Number(tr.scale[1]) || 1);
+              if (Number.isFinite(Number(tr.rotation))) tex.rotation = Number(tr.rotation);
+              if (tr.texCoord !== undefined) tex.channel = Number(tr.texCoord) || 0;
+              tex.center.set(0, 0);
+            }
+            tex.needsUpdate = true;
+            textureCache.set(key, tex);
+            return tex;
+          }
+
+          function materialFor(index) {
+            const d = (json.materials || [])[index] || {};
+            const p = d.pbrMetallicRoughness || {};
+            const sg = d.extensions && d.extensions.KHR_materials_pbrSpecularGlossiness;
+            const c = sg && sg.diffuseFactor ? sg.diffuseFactor : (p.baseColorFactor || [1,1,1,1]);
+            const isUnlit = !!(d.extensions && d.extensions.KHR_materials_unlit);
+
+            const common = {
+              color: new THREE.Color(c[0],c[1],c[2]),
+              opacity: c[3] === undefined ? 1 : c[3],
+              transparent: (c[3] !== undefined && c[3] < 0.999) || d.alphaMode === 'BLEND',
+              side: d.doubleSided ? THREE.DoubleSide : THREE.FrontSide
+            };
+            const m = isUnlit
+              ? new THREE.MeshBasicMaterial(common)
+              : new IngeTrazoMatteMaterial(Object.assign(common, {
+                  toneMapped: false,
+                  metalness: p.metallicFactor ?? 0,
+                  roughness: p.roughnessFactor ?? 1
+                }));
+
+            const baseTexInfo = sg && sg.diffuseTexture ? sg.diffuseTexture : p.baseColorTexture;
+            if (baseTexInfo) m.map = getTexture(baseTexInfo, true);
+
+            if (!isUnlit) {
+              if (p.metallicRoughnessTexture) {
+                const mr = getTexture(p.metallicRoughnessTexture, false);
+                m.metalnessMap = mr;
+                m.roughnessMap = mr;
+              }
+              if (d.normalTexture) {
+                m.normalMap = getTexture(d.normalTexture, false);
+                if (d.normalTexture.scale !== undefined) m.normalScale.setScalar(Number(d.normalTexture.scale) || 1);
+              }
+              if (d.occlusionTexture) {
+                m.aoMap = getTexture(d.occlusionTexture, false);
+                m.aoMapIntensity = d.occlusionTexture.strength ?? 1;
+              }
+              if (d.emissiveTexture) m.emissiveMap = getTexture(d.emissiveTexture, true);
+              if (d.emissiveFactor) m.emissive.setRGB(...d.emissiveFactor);
+            }
+
+            if (d.alphaMode === 'MASK') {
+              m.alphaTest = d.alphaCutoff ?? 0.5;
+              m.transparent = false;
+            }
+            m.name = d.name || '';
+            m.needsUpdate = true;
+            return m;
+          }
+          const materials = (json.materials || []).map((_,i)=>materialFor(i));
+          const meshDefs = (json.meshes || []).map(md => {
+            const primitives = md.primitives || [];
+            const objects = primitives.map(pr => {
+              const g = new THREE.BufferGeometry();
+              const attrs = pr.attributes || {};
+              const amap = {POSITION:'position',NORMAL:'normal',TANGENT:'tangent',TEXCOORD_0:'uv',TEXCOORD_1:'uv1',COLOR_0:'color'};
+              Object.keys(amap).forEach(k => {
+                if (attrs[k] === undefined) return;
+                const a = accessorData(attrs[k]);
+                g.setAttribute(amap[k], new THREE.BufferAttribute(a.array, a.itemSize, a.normalized));
+              });
+              if (pr.indices !== undefined) {
+                const a = accessorData(pr.indices);
+                g.setIndex(new THREE.BufferAttribute(a.array, 1, a.normalized));
+              }
+              if (!g.hasAttribute('normal') && g.hasAttribute('position')) g.computeVertexNormals();
+              const mat = materials[pr.material] || new THREE.MeshStandardMaterial({color:0xd0d0d0});
+              return new THREE.Mesh(g, mat);
+            });
+            if (objects.length === 1) { objects[0].name = md.name || ''; return objects[0]; }
+            const group = new THREE.Group(); group.name = md.name || ''; objects.forEach(o=>group.add(o)); return group;
+          });
+          const nodeObjects = (json.nodes || []).map(nd => {
+            let o = nd.mesh !== undefined ? meshDefs[nd.mesh].clone(true) : new THREE.Group();
+            o.name = nd.name || o.name || ''; o.userData = Object.assign({},o.userData,nd.extras||{});
+            if (nd.matrix) { o.matrix.fromArray(nd.matrix); o.matrix.decompose(o.position,o.quaternion,o.scale); }
+            else {
+              if (nd.translation) o.position.fromArray(nd.translation);
+              if (nd.rotation) o.quaternion.fromArray(nd.rotation);
+              if (nd.scale) o.scale.fromArray(nd.scale);
+            }
+            return o;
+          });
+          (json.nodes || []).forEach((nd,i)=>(nd.children||[]).forEach(ci=>nodeObjects[i].add(nodeObjects[ci])));
+          const sceneDef = (json.scenes || [])[json.scene || 0] || {nodes:[]};
+          const group = new THREE.Group(); group.name = 'SketchUp Model';
+          (sceneDef.nodes || []).forEach(i=>group.add(nodeObjects[i]));
+          return group;
+        }
+
+        function parsePLY(arrayBuffer) {
+          const bytes = new Uint8Array(arrayBuffer);
+          let headerEnd = -1;
+          for (let i=0;i<Math.min(bytes.length, 65536)-10;i++) {
+            if (bytes[i]===101 && bytes[i+1]===110 && bytes[i+2]===100 && bytes[i+3]===95 && bytes[i+4]===104 && bytes[i+5]===101 && bytes[i+6]===97 && bytes[i+7]===100 && bytes[i+8]===101 && bytes[i+9]===114) {
+              let j=i+10; while(j<bytes.length && bytes[j]!==10) j++; headerEnd=j+1; break;
+            }
+          }
+          if (headerEnd < 0) throw new Error('Invalid PLY header');
+          const header = new TextDecoder().decode(bytes.slice(0, headerEnd));
+          const lines = header.split(/\r?\n/);
+          const format = (lines.find(l=>l.startsWith('format '))||'').split(/\s+/)[1];
+          let vertexCount=0, inVertex=false, props=[];
+          const types={char:['i8',1],int8:['i8',1],uchar:['u8',1],uint8:['u8',1],short:['i16',2],int16:['i16',2],ushort:['u16',2],uint16:['u16',2],int:['i32',4],int32:['i32',4],uint:['u32',4],uint32:['u32',4],float:['f32',4],float32:['f32',4],double:['f64',8],float64:['f64',8]};
+          for (const line of lines) {
+            const t=line.trim().split(/\s+/);
+            if (t[0]==='element') { inVertex=t[1]==='vertex'; if(inVertex) vertexCount=Number(t[2])||0; }
+            else if (inVertex && t[0]==='property' && t[1]!=='list') props.push({type:t[1],name:t[2]});
+          }
+          const pos=new Float32Array(vertexCount*3); let col=null;
+          const pi={x:props.findIndex(p=>p.name==='x'),y:props.findIndex(p=>p.name==='y'),z:props.findIndex(p=>p.name==='z')};
+          const ci={r:props.findIndex(p=>['red','r','diffuse_red'].includes(p.name)),g:props.findIndex(p=>['green','g','diffuse_green'].includes(p.name)),b:props.findIndex(p=>['blue','b','diffuse_blue'].includes(p.name))};
+          const hasColor=ci.r>=0&&ci.g>=0&&ci.b>=0; if(hasColor) col=new Float32Array(vertexCount*3);
+          if (format==='ascii') {
+            const text=new TextDecoder().decode(bytes.slice(headerEnd)); const rows=text.trim().split(/\r?\n/);
+            for(let i=0;i<vertexCount&&i<rows.length;i++){const v=rows[i].trim().split(/\s+/).map(Number);pos[i*3]=v[pi.x];pos[i*3+1]=v[pi.y];pos[i*3+2]=v[pi.z];if(hasColor){col[i*3]=(v[ci.r]||0)/255;col[i*3+1]=(v[ci.g]||0)/255;col[i*3+2]=(v[ci.b]||0)/255;}}
+          } else {
+            const little=format!=='binary_big_endian', dv=new DataView(arrayBuffer); let off=headerEnd;
+            const getter={i8:'getInt8',u8:'getUint8',i16:'getInt16',u16:'getUint16',i32:'getInt32',u32:'getUint32',f32:'getFloat32',f64:'getFloat64'};
+            for(let i=0;i<vertexCount;i++){const vals=[];for(const p of props){const [tt,sz]=types[p.type]||[];if(!tt)throw new Error(`Unsupported PLY type ${p.type}`);vals.push(dv[getter[tt]](off,little));off+=sz;}pos[i*3]=vals[pi.x];pos[i*3+1]=vals[pi.y];pos[i*3+2]=vals[pi.z];if(hasColor){col[i*3]=(vals[ci.r]||0)/255;col[i*3+1]=(vals[ci.g]||0)/255;col[i*3+2]=(vals[ci.b]||0)/255;}}
+          }
+          const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); if(hasColor)g.setAttribute('color',new THREE.BufferAttribute(col,3)); return g;
+        }
+
+        const annotationRoots = [];
+        const annotationMaterials = [];
+        const annotationLabels = [];
+        let modelOccluders = [];
+        let annotationOcclusionDirty = true;
+        const annotationOcclusionRaycaster = new THREE.Raycaster();
+        const annotationOcclusionCameraPos = new THREE.Vector3();
+        const annotationOcclusionLabelPos = new THREE.Vector3();
+        const annotationOcclusionDir = new THREE.Vector3();
+        const annotationOcclusionForward = new THREE.Vector3();
+
+        function isEffectivelyVisible(obj) {
+          let n=obj;
+          while(n){
+            if(n.visible===false) return false;
+            if(n.userData && (n.userData.__fgidTagState===1 || n.userData.__fgidTagState===2)) return false;
+            n=n.parent;
+          }
+          return true;
+        }
+
+        function materialBlocksAnnotation(material) {
+          const mats=Array.isArray(material)?material:[material];
+          return mats.some(mat=>{
+            if(!mat) return false;
+            const opacity=(mat.opacity===undefined)?1:Number(mat.opacity);
+            // Objects deliberately placed in the viewer's Transparent state do not occlude annotations.
+            if(mat.transparent && opacity < 0.95) return false;
+            return opacity >= 0.95;
+          });
+        }
+
+        function updateAnnotationOcclusion() {
+          annotationOcclusionDirty=false;
+          if(!camera || !annotationLabels.length || !modelOccluders.length) {
+            annotationLabels.forEach(sp=>{ if(sp) sp.visible=true; });
+            return;
+          }
+
+          camera.getWorldPosition(annotationOcclusionCameraPos);
+          camera.getWorldDirection(annotationOcclusionForward);
+
+          annotationLabels.forEach(sp=>{
+            if(!sp || !sp.parent) return;
+            sp.getWorldPosition(annotationOcclusionLabelPos);
+            annotationOcclusionDir.copy(annotationOcclusionLabelPos).sub(annotationOcclusionCameraPos);
+            const labelDistance=annotationOcclusionDir.length();
+            if(!isFinite(labelDistance) || labelDistance < 1e-7) { sp.visible=true; return; }
+
+            // A label behind the camera must not leak onto the foreground.
+            if(annotationOcclusionDir.dot(annotationOcclusionForward) <= 0) { sp.visible=false; return; }
+
+            annotationOcclusionDir.normalize();
+            annotationOcclusionRaycaster.set(annotationOcclusionCameraPos, annotationOcclusionDir);
+            annotationOcclusionRaycaster.near=Math.max(camera.near || 0, 0);
+            annotationOcclusionRaycaster.far=Math.max(0, labelDistance - Math.max(0.002, labelDistance*1e-5));
+
+            const hits=annotationOcclusionRaycaster.intersectObjects(modelOccluders,false);
+            let blocked=false;
+            for(const hit of hits){
+              const obj=hit.object;
+              if(!obj || !isEffectivelyVisible(obj)) continue;
+              if(!materialBlocksAnnotation(obj.material)) continue;
+              blocked=true;
+              break;
+            }
+            sp.visible=!blocked;
+          });
+        }
+
+        function roundedRect(ctx, x, y, w, h, r) {
+          const rr=Math.min(r,w/2,h/2);
+          ctx.beginPath();
+          ctx.moveTo(x+rr,y);
+          ctx.arcTo(x+w,y,x+w,y+h,rr);
+          ctx.arcTo(x+w,y+h,x,y+h,rr);
+          ctx.arcTo(x,y+h,x,y,rr);
+          ctx.arcTo(x,y,x+w,y,rr);
+          ctx.closePath();
+        }
+
+        function createTextSprite(text, worldPos, accent='#d98b35') {
+          const label=String(text || ' ');
+          const dpr=Math.min(2,window.devicePixelRatio || 1);
+          const canvas=document.createElement('canvas'), ctx=canvas.getContext('2d');
+          const fontSize=28, padX=18, padY=10;
+          ctx.font=`700 ${fontSize}px Arial, sans-serif`;
+          const metrics=ctx.measureText(label);
+          const cssW=Math.max(92,Math.ceil(metrics.width)+padX*2), cssH=fontSize+padY*2;
+          canvas.width=Math.ceil(cssW*dpr); canvas.height=Math.ceil(cssH*dpr);
+          ctx.scale(dpr,dpr);
+          ctx.font=`700 ${fontSize}px Arial, sans-serif`;
+          ctx.shadowColor='rgba(0,0,0,.28)'; ctx.shadowBlur=8; ctx.shadowOffsetY=3;
+          roundedRect(ctx,4,4,cssW-8,cssH-8,9);
+          ctx.fillStyle=DARK_DEFAULT?'rgba(22,26,32,.94)':'rgba(34,39,46,.94)'; ctx.fill();
+          ctx.shadowColor='transparent';
+          ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.stroke();
+          ctx.fillStyle=accent; roundedRect(ctx,4,4,5,cssH-8,2.5); ctx.fill();
+          ctx.fillStyle='#ffffff'; ctx.textBaseline='middle'; ctx.fillText(label,padX,cssH/2);
+          const tex=new THREE.CanvasTexture(canvas); tex.colorSpace=THREE.SRGBColorSpace;
+          const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:true,depthWrite:false});
+          annotationMaterials.push(mat);
+          const sp=new THREE.Sprite(mat); sp.position.fromArray(worldPos);
+          sp.scale.set(cssW/180,cssH/180,1); sp.renderOrder=1000;
+          sp.userData.__fgidAnnotationLabel=true;
+          annotationLabels.push(sp);
+          annotationOcclusionDirty=true;
+          return sp;
+        }
+
+        function lineSegments(points, color, dashed=false) {
+          const g=new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3().fromArray(p)));
+          const m=dashed
+            ? new THREE.LineDashedMaterial({color,transparent:true,opacity:.9,dashSize:.10,gapSize:.055,depthTest:true})
+            : new THREE.LineBasicMaterial({color,transparent:true,opacity:.92,depthTest:true});
+          annotationMaterials.push(m);
+          const line=new THREE.LineSegments(g,m);
+          if(dashed) line.computeLineDistances();
+          line.renderOrder=20;
+          return line;
+        }
+
+        function annotationDot(pos, color, radius=.045) {
+          const g=new THREE.SphereGeometry(radius,12,8);
+          const m=new THREE.MeshBasicMaterial({color,depthTest:true}); annotationMaterials.push(m);
+          const dot=new THREE.Mesh(g,m); dot.position.fromArray(pos); dot.renderOrder=22; return dot;
+        }
+
+        function arrowHead(fromArr,toArr,color,size=.11) {
+          const from=new THREE.Vector3().fromArray(fromArr), to=new THREE.Vector3().fromArray(toArr);
+          const dir=to.clone().sub(from); if(dir.lengthSq()<1e-12) return new THREE.Group();
+          dir.normalize();
+          const g=new THREE.ConeGeometry(size*.34,size,10);
+          const m=new THREE.MeshBasicMaterial({color,depthTest:true}); annotationMaterials.push(m);
+          const cone=new THREE.Mesh(g,m);
+          cone.position.copy(to.clone().addScaledVector(dir,-size*.42));
+          cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);
+          cone.renderOrder=23; return cone;
+        }
+
+        function buildAnnotations() {
+          const byTag=new Map();
+          (ANNOTATIONS||[]).forEach(a=>{
+            const tag=a.tag||'Untagged'; let grp=byTag.get(tag);
+            if(!grp){grp=new THREE.Group();grp.name=`Annotations ${tag}`;grp.userData.__fgidTopLevelRoot=true;grp.userData.__fgidTopLevelTag=tag;grp.userData.fgid_tags=[tag];byTag.set(tag,grp);annotationRoots.push(grp);scene.add(grp);}
+            const color=DARK_DEFAULT?0xf1b45d:0x9a5a20;
+            const accent=DARK_DEFAULT?'#f1b45d':'#d98b35';
+            if(a.type==='dimension_linear'){
+              // Extension lines stay subtle; the dimension line is dashed and receives arrow heads.
+              grp.add(lineSegments([a.start,a.dim_start,a.end,a.dim_end],color,false));
+              grp.add(lineSegments([a.dim_start,a.dim_end],color,true));
+              grp.add(arrowHead(a.dim_end,a.dim_start,color));
+              grp.add(arrowHead(a.dim_start,a.dim_end,color));
+              grp.add(annotationDot(a.dim_start,color,.032));
+              grp.add(annotationDot(a.dim_end,color,.032));
+              const mid=[(a.dim_start[0]+a.dim_end[0])/2,(a.dim_start[1]+a.dim_end[1])/2,(a.dim_start[2]+a.dim_end[2])/2];
+              grp.add(createTextSprite(a.text,mid,accent));
+            } else if(a.type==='text'){
+              if(a.leader){
+                grp.add(lineSegments([a.anchor,a.text_position],color,false));
+                grp.add(annotationDot(a.anchor,color,.038));
+                grp.add(arrowHead(a.text_position,a.anchor,color,.10));
+              }
+              grp.add(createTextSprite(a.text,a.text_position,accent));
+            }
+          });
+        }
+
+        function loadEmbeddedPointCloud() {
+          if (!HAS_EMBEDDED_PLY || !EMBEDDED_PLY_BASE64) return;
+
+          try {
+            const geometry = parsePLY(b64ToArrayBuffer(EMBEDDED_PLY_BASE64));
+
+            // Raw PLY coordinates are metres.
+            // When the same cloud is loaded by our SketchUp PLY importer,
+            // PLY_TRANSFORM_MATRIX reproduces its exact SketchUp transformation
+            // and the SketchUp -> Three/glTF axis conversion.
+            if (PLY_TRANSFORM_MODE === 'matrix' &&
+                Array.isArray(PLY_TRANSFORM_MATRIX) &&
+                PLY_TRANSFORM_MATRIX.length === 16) {
+              const m = new THREE.Matrix4();
+              m.set(...PLY_TRANSFORM_MATRIX);
+              geometry.applyMatrix4(m);
+            } else {
+              // Base conversion: SketchUp XYZ -> Three/glTF X,Z,-Y.
+              const suToThree = new THREE.Matrix4();
+              suToThree.set(
+                1,  0, 0, 0,
+                0,  0, 1, 0,
+                0, -1, 0, 0,
+                0,  0, 0, 1
+              );
+              geometry.applyMatrix4(suToThree);
+
+              if (PLY_TRANSFORM_MODE === 'manual') {
+                const t = PLY_MANUAL_TRANSFORM || {};
+                const tr = Array.isArray(t.translation) ? t.translation : [0,0,0];
+                const rr = Array.isArray(t.rotation_deg) ? t.rotation_deg : [0,0,0];
+                const sc = Number.isFinite(Number(t.scale)) ? Number(t.scale) : 1.0;
+
+                const manual = new THREE.Matrix4();
+                const position = new THREE.Vector3(
+                  Number(tr[0]) || 0,
+                  Number(tr[2]) || 0,
+                  -(Number(tr[1]) || 0)
+                );
+
+                // Rotations are entered in the SketchUp XYZ frame.
+                const eulerSU = new THREE.Euler(
+                  THREE.MathUtils.degToRad(Number(rr[0]) || 0),
+                  THREE.MathUtils.degToRad(Number(rr[2]) || 0),
+                  THREE.MathUtils.degToRad(-(Number(rr[1]) || 0)),
+                  'XYZ'
+                );
+                const quat = new THREE.Quaternion().setFromEuler(eulerSU);
+                const scale = new THREE.Vector3(sc, sc, sc);
+                manual.compose(position, quat, scale);
+                geometry.applyMatrix4(manual);
+              }
+            }
+
+            geometry.computeBoundingBox();
+            geometry.computeBoundingSphere();
+
+            const hasColors = geometry.hasAttribute('color');
+            const pointSizeInput = document.getElementById('plyPointSize');
+            const initialSize = Math.max(
+              0.0005,
+              Number(pointSizeInput.value) || Number(PLY_POINT_SIZE_DEFAULT) || 0.015
+            );
+
+            const material = new THREE.PointsMaterial({
+              size: initialSize,
+              sizeAttenuation: true,
+              vertexColors: hasColors,
+              color: hasColors ? 0xffffff : 0xd8e6f3
+            });
+
+            pointCloud = new THREE.Points(geometry, material);
+            pointCloud.name = EMBEDDED_PLY_NAME || 'Point Cloud';
+            pointCloud.frustumCulled = true;
+            scene.add(pointCloud);
+
+            document.getElementById('btnPointCloud').style.display = '';
+            document.getElementById('plyPointSizeRow').style.display = 'flex';
+            document.getElementById('plyTransformPanel').style.display = 'block';
+            updatePointCloudButton();
+          } catch (error) {
+            console.error('PLY load error:', error);
+            alert('The embedded PLY point cloud could not be loaded.');
+          }
+        }
+
+        function applyPointCloudScene(state) {
+          if (!pointCloud || !FGID_META.cloud || !state) return;
+          const material = pointCloud.material;
+          const input = document.getElementById('plyPointSize');
+          input.min = 1;
+          input.max = 12;
+          input.step = 0.5;
+          const size = Math.max(1, Math.min(12, Number(state.size) || 2));
+          input.value = size;
+          material.size = size;
+          material.sizeAttenuation = false;
+          material.opacity = Math.max(0, Math.min(1, Number(state.opacity ?? 1)));
+          material.transparent = material.opacity < 1;
+          setPointCloudVisible(state.visible);
+          const axis = new THREE.Matrix4().set(
+            1,0,0,0, 0,0,1,0, 0,-1,0,0, 0,0,0,1
+          );
+          pointCloud.matrixAutoUpdate = false;
+          pointCloud.matrix.copy(axis).multiply(new THREE.Matrix4().set(...state.matrix))
+            .multiply(axis.clone().invert());
+          pointCloud.matrixWorldNeedsUpdate = true;
+          const crop = pointCloud.userData.crop;
+          crop.lower.value.fromArray(state.clipLo);
+          crop.upper.value.fromArray(state.clipHi);
+          const hidden = new Set(state.hiddenScans || []);
+          const key = JSON.stringify([...hidden].sort());
+          if (pointCloud.userData.scanKey !== key) {
+            const geometry = pointCloud.geometry;
+            const scans = FGID_META.cloud.scans;
+            if (!hidden.size || !scans.length) {
+              geometry.setIndex(null);
+            } else {
+              const visible = scans.filter(scan => !hidden.has(scan.id));
+              const count = visible.reduce((sum, scan) => sum + scan.count, 0);
+              const indices = new Uint32Array(count);
+              let offset = 0;
+              for (const scan of visible) {
+                for (let i = 0; i < scan.count; i++) indices[offset++] = scan.start + i;
+              }
+              geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+            }
+            pointCloud.userData.scanKey = key;
+          }
+          material.needsUpdate = true;
+        }
+
+        function configureCloudScenes() {
+          if (!pointCloud || !FGID_META.cloud) return;
+          const crop = {
+            lower: {value: new THREE.Vector3()},
+            upper: {value: new THREE.Vector3()}
+          };
+          pointCloud.userData.crop = crop;
+          pointCloud.material.onBeforeCompile = shader => {
+            shader.uniforms.fgidCropLo = crop.lower;
+            shader.uniforms.fgidCropHi = crop.upper;
+            shader.vertexShader = 'varying vec3 fgidLocalPoint;\n' + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>',
+              '#include <begin_vertex>\nfgidLocalPoint = vec3(position.x, -position.z, position.y);');
+            shader.fragmentShader =
+              'varying vec3 fgidLocalPoint; uniform vec3 fgidCropLo; uniform vec3 fgidCropHi;\n' +
+              shader.fragmentShader;
+            shader.fragmentShader = shader.fragmentShader.replace('#include <clipping_planes_fragment>',
+              '#include <clipping_planes_fragment>\nif (any(lessThan(fgidLocalPoint, fgidCropLo)) || any(greaterThan(fgidLocalPoint, fgidCropHi))) discard;');
+          };
+          pointCloud.material.customProgramCacheKey = () => 'fgid-scene-crop-v1';
+          document.getElementById('plyTransformPanel').style.display = 'none';
+          applyPointCloudScene(FGID_META.cloud.current);
+        }
+
+        function applyExtraPointCloudTransform() {
+          if (!pointCloud) return;
+
+          const tx = Number(document.getElementById('plyTx').value) || 0;
+          const ty = Number(document.getElementById('plyTy').value) || 0;
+          const tz = Number(document.getElementById('plyTz').value) || 0;
+          const rx = THREE.MathUtils.degToRad(Number(document.getElementById('plyRx').value) || 0);
+          const ry = THREE.MathUtils.degToRad(Number(document.getElementById('plyRy').value) || 0);
+          const rz = THREE.MathUtils.degToRad(Number(document.getElementById('plyRz').value) || 0);
+          const sc = Math.max(0.000001, Number(document.getElementById('plyScale').value) || 1);
+
+          // Inputs use SketchUp coordinates; convert to Three coordinates.
+          pointCloud.position.set(tx, tz, -ty);
+          pointCloud.rotation.set(rx, rz, -ry, 'XYZ');
+          pointCloud.scale.setScalar(sc);
+          pointCloud.updateMatrixWorld(true);
+        }
+
+        function updatePointCloudButton() {
+          const button = document.getElementById('btnPointCloud');
+          if (!pointCloud) {
+            button.style.display = 'none';
+            return;
+          }
+          button.classList.toggle('active', pointCloudVisible);
+          button.textContent = pointCloudVisible ? 'Point cloud ON' : 'Point cloud OFF';
+        }
+
+        function setPointCloudVisible(visible) {
+          pointCloudVisible = !!visible;
+          if (pointCloud) pointCloud.visible = pointCloudVisible;
+          updatePointCloudButton();
+        }
+
+        function addLooseEdges() {
+          if (!Array.isArray(LOOSE_EDGE_POSITIONS) || LOOSE_EDGE_POSITIONS.length < 6) return;
+
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute(
+            'position',
+            new THREE.Float32BufferAttribute(LOOSE_EDGE_POSITIONS, 3)
+          );
+          geometry.computeBoundingSphere();
+
+          const material = new THREE.LineBasicMaterial({
+            color: darkMode ? 0xffffff : 0x111111,
+            transparent: true,
+            opacity: 0.85,
+            depthTest: true
+          });
+
+          const lines = new THREE.LineSegments(geometry, material);
+          lines.name = '__loose_edges__';
+          lines.renderOrder = 3;
+          scene.add(lines);
+          edgeObjects.push(lines);
+        }
+
+        function addEdges(obj) {
+          obj.traverse(child => {
+            if (!child.isMesh || !child.geometry) return;
+            // Never generate outline geometry for FGId_Cotes_3D objects.
+            if (isSpecialCotesObject(child)) return;
+            const edgesGeo = new THREE.EdgesGeometry(child.geometry, 30);
+            const edgesMat = new THREE.LineBasicMaterial({ color:0x111111, transparent:true, opacity:0.55, depthTest:true });
+            const edges = new THREE.LineSegments(edgesGeo, edgesMat);
+            edges.name = '__edges_30deg__';
+            edges.renderOrder = 2;
+            child.add(edges);
+            edgeObjects.push(edges);
+          });
+        }
+
+        let renderMode = FGID_META.initialRenderMode || 'textures';
+        document.getElementById('renderMode').value = renderMode;
+        const renderSources = new WeakMap();
+        const renderVariants = new Map();
+        const textureAverages = new WeakMap();
+
+        function averageTextureColor(texture) {
+          const image = texture?.image;
+          if (!image || !(image.width > 0) || !(image.height > 0)) return null;
+          if (textureAverages.has(image)) return textureAverages.get(image);
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 8;
+          const context = canvas.getContext('2d', {willReadFrequently:true});
+          context.drawImage(image, 0, 0, 8, 8);
+          const pixels = context.getImageData(0, 0, 8, 8).data;
+          let red = 0, green = 0, blue = 0, weight = 0;
+          for (let i = 0; i < pixels.length; i += 4) {
+            const alpha = pixels[i+3] / 255;
+            red += pixels[i] * alpha;
+            green += pixels[i+1] * alpha;
+            blue += pixels[i+2] * alpha;
+            weight += alpha;
+          }
+          const color = weight ? new THREE.Color().setRGB(
+            red / weight / 255, green / weight / 255, blue / weight / 255,
+            THREE.SRGBColorSpace) : new THREE.Color(1,1,1);
+          textureAverages.set(image, color);
+          return color;
+        }
+
+        function clearRenderVariants() {
+          for (const variants of renderVariants.values()) {
+            for (const material of variants.values()) material.dispose();
+          }
+          renderVariants.clear();
+        }
+
+        function renderMaterial(source) {
+          if (renderMode === 'textures') return source;
+          if (!renderVariants.has(source)) renderVariants.set(source, new Map());
+          const variants = renderVariants.get(source);
+          let material = variants.get(renderMode);
+          if (!material) {
+            if (renderMode === 'normals') {
+              material = new THREE.MeshNormalMaterial();
+            } else if (renderMode === 'hiddenline' || renderMode === 'wireframe') {
+              material = new THREE.MeshBasicMaterial();
+              material.wireframe = renderMode === 'wireframe';
+            } else if (renderMode === 'clay') {
+              material = new THREE.MeshStandardMaterial({
+                color:0x9c948a, metalness:0, roughness:1, toneMapped:false
+              });
+            } else if (renderMode === 'monochrome') {
+              material = new IngeTrazoMatteMaterial({
+                color:0xd4d7dc, metalness:0, roughness:1, toneMapped:false
+              });
+            } else {
+              material = source.clone();
+              for (const key of ['map','normalMap','bumpMap','roughnessMap','metalnessMap','aoMap','emissiveMap']) {
+                if (key in material) material[key] = null;
+              }
+            }
+            variants.set(renderMode, material);
+          }
+          if (renderMode === 'colors' || renderMode === 'xray') {
+            material.color.copy(source.color);
+            const average = averageTextureColor(source.map);
+            if (average) material.color.multiply(average);
+          } else if (renderMode === 'hiddenline') {
+            material.color.setHex(darkMode ? 0x17202e : 0xffffff);
+          } else if (renderMode === 'wireframe') {
+            material.color.setHex(darkMode ? 0xe7edf4 : 0x202020);
+          }
+          const opacity = renderMode === 'xray' ? source.opacity * 0.25 : source.opacity;
+          const transparent = opacity < 1 || source.transparent;
+          if (material.transparent !== transparent || material.side !== source.side ||
+              material.clippingPlanes !== source.clippingPlanes) material.needsUpdate = true;
+          material.side = source.side;
+          material.visible = source.visible;
+          material.opacity = opacity;
+          material.transparent = transparent;
+          material.depthTest = renderMode !== 'wireframe';
+          material.depthWrite = renderMode === 'xray' || renderMode === 'wireframe' ? false : source.depthWrite;
+          material.clippingPlanes = source.clippingPlanes;
+          material.clipIntersection = source.clipIntersection;
+          material.polygonOffset = source.polygonOffset;
+          material.polygonOffsetFactor = source.polygonOffsetFactor;
+          material.polygonOffsetUnits = source.polygonOffsetUnits;
+          return material;
+        }
+
+        function applyRenderEdges() {
+          const hiddenLine = renderMode === 'hiddenline';
+          const wireframe = renderMode === 'wireframe';
+          const visible = !wireframe && (hiddenLine || edgesVisible);
+          for (const edge of edgeObjects) {
+            edge.visible = visible;
+            edge.material.depthTest = renderMode !== 'xray';
+            edge.material.color.setHex(darkMode ? 0xffffff : 0x111111);
+            edge.material.opacity = hiddenLine ? 1 : 0.55;
+          }
+          const button = document.getElementById('btnEdges');
+          button.disabled = hiddenLine || wireframe;
+          button.classList.toggle('active', visible);
+          button.textContent = visible ? 'Edges 30° ON' : 'Edges 30° OFF';
+        }
+
+        function applyRenderMode() {
+          if (!root) return;
+          root.traverse(object => {
+            if (!object.isMesh || isSpecialCotesObject(object)) return;
+            if (!renderSources.has(object)) renderSources.set(object, object.material);
+            const source = renderSources.get(object);
+            object.material = Array.isArray(source) ? source.map(renderMaterial) : renderMaterial(source);
+          });
+          applyRenderEdges();
+          annotationOcclusionDirty = true;
+        }
+
+        function setEdgesVisible(v) {
+          edgesVisible = v;
+          applyRenderEdges();
+        }
+
+        function getBox() {
+          const box = new THREE.Box3();
+
+          if (root) {
+            box.expandByObject(root);
+          }
+
+          // The point cloud participates in Fit / default camera even when hidden.
+          if (pointCloud && pointCloud.geometry) {
+            pointCloud.updateWorldMatrix(true, false);
+            if (!pointCloud.geometry.boundingBox) pointCloud.geometry.computeBoundingBox();
+            const cloudBox = pointCloud.geometry.boundingBox.clone().applyMatrix4(pointCloud.matrixWorld);
+            box.union(cloudBox);
+          }
+
+          if (!isFinite(box.min.x) || box.isEmpty()) {
+            box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(10,10,10));
+          }
+          return box;
+        }
+
+        function getModelMetrics() {
+          const box = getBox();
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+          const sphere = box.getBoundingSphere(new THREE.Sphere());
+          const radius = Math.max(sphere.radius, Math.max(size.x, size.y, size.z) * 0.5, 1);
+          return { box, center, size, radius };
+        }
+
+        function updateClipFromModel() {
+          const m = getModelMetrics();
+          // Keep the depth range close to the actual model size. This improves
+          // precision for thin / closely spaced faces while retaining enough room
+          // for normal orbit and zoom operations.
+          camera.near = Math.max(m.radius / 1000, 0.005);
+          camera.far = Math.max(m.radius * 100, 100);
+          camera.updateProjectionMatrix();
+        }
+
+        function replaceCamera(newCamera, position, target) {
+          newCamera.position.copy(position);
+          newCamera.up.copy(camera.up);
+          camera = newCamera;
+          controls.object = camera;
+          controls.target.copy(target);
+          camera.lookAt(target);
+          camera.updateProjectionMatrix();
+          controls.update();
+        }
+
+        function ensurePerspectiveCamera(fov = 45) {
+          const aspect = window.innerWidth / window.innerHeight;
+          if (!camera.isPerspectiveCamera) {
+            const position = camera.position.clone();
+            const target = controls.target.clone();
+            replaceCamera(
+              new THREE.PerspectiveCamera(fov, aspect, 0.01, 1000000),
+              position,
+              target
+            );
+          }
+          camera.fov = fov;
+          camera.aspect = aspect;
+          camera.updateProjectionMatrix();
+        }
+
+        function ensureOrthographicCamera(radius = 10) {
+          const aspect = window.innerWidth / window.innerHeight;
+          const halfHeight = Math.max(radius * 1.25, 0.001);
+          const halfWidth = halfHeight * aspect;
+          if (!camera.isOrthographicCamera) {
+            const position = camera.position.clone();
+            const target = controls.target.clone();
+            replaceCamera(
+              new THREE.OrthographicCamera(-halfWidth, halfWidth, halfHeight, -halfHeight, 0.001, 1000000),
+              position,
+              target
+            );
+          } else {
+            camera.left = -halfWidth;
+            camera.right = halfWidth;
+            camera.top = halfHeight;
+            camera.bottom = -halfHeight;
+            camera.updateProjectionMatrix();
+          }
+        }
+
+        function setProjectionMode(useParallel) {
+          const m = getModelMetrics();
+          const position = camera.position.clone();
+          const target = controls.target.clone();
+          const direction = position.clone().sub(target);
+          if (direction.lengthSq() < 1e-12) direction.set(1, 1, 1);
+          direction.normalize();
+
+          parallelMode = useParallel;
+          if (parallelMode) {
+            ensureOrthographicCamera(m.radius);
+          } else {
+            ensurePerspectiveCamera(45);
+            const dist = distanceToFrame(m.radius, camera.fov);
+            camera.position.copy(target).add(direction.multiplyScalar(dist));
+            camera.lookAt(target);
+            controls.update();
+          }
+          updateClipFromModel();
+
+          const button = document.getElementById('btnProjection');
+          button.textContent = parallelMode ? 'Perspective view' : 'Parallel view';
+          button.classList.toggle('active', parallelMode);
+        }
+
+        function distanceToFrame(radius, fovDeg) {
+          const fov = THREE.MathUtils.degToRad(Math.max(10, Math.min(120, fovDeg || 45)));
+          return (radius / Math.sin(fov * 0.5)) * 1.22;
+        }
+
+        let defaultViewDirection = new THREE.Vector3(1, 1, 1).normalize();
+        let defaultOrbitCenter = null;
+
+        function applyDefaultModelCamera() {
+          const m = getModelMetrics();
+          defaultOrbitCenter = m.center.clone();
+          fitView(defaultViewDirection, defaultOrbitCenter);
+        }
+
+        function fitView(direction = null, forcedCenter = null) {
+          const m = getModelMetrics();
+          const center = forcedCenter ? forcedCenter.clone() : (defaultOrbitCenter ? defaultOrbitCenter.clone() : m.center.clone());
+          let dir = direction ? direction.clone() : defaultViewDirection.clone();
+          if (!isFinite(dir.x) || dir.lengthSq() < 1e-12) dir = new THREE.Vector3(1, 1, 1);
+          dir.normalize();
+          let dist;
+          if (parallelMode) {
+            ensureOrthographicCamera(m.radius);
+            dist = Math.max(m.radius * 3, 10);
+          } else {
+            ensurePerspectiveCamera(45);
+            dist = distanceToFrame(m.radius, camera.fov);
+          }
+          // Caméra volontairement placée en X+, Y+, Z+ par rapport au centre du modèle.
+          camera.position.copy(center).add(dir.multiplyScalar(dist));
+          controls.target.copy(center);
+          controls.minDistance = Math.max(m.radius * 0.02, 0.001);
+          controls.maxDistance = Math.max(m.radius * 100, dist * 20);
+          updateClipFromModel();
+          camera.lookAt(center);
+          controls.update();
+        }
+
+        function setObjectOpacityRecursive(obj, opacity) {
+          obj.traverse(child => {
+            if (!child.material) return;
+
+            if (!child.userData.__fgidOriginalMaterials) {
+              const originals = Array.isArray(child.material) ? child.material : [child.material];
+              child.userData.__fgidOriginalMaterials = originals.map(mat => ({
+                transparent: mat.transparent,
+                opacity: mat.opacity,
+                depthWrite: mat.depthWrite
+              }));
+            }
+
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((mat, index) => {
+              if (!mat.userData.__fgidTriStateClone) {
+                mat = mat.clone();
+                mat.userData.__fgidTriStateClone = true;
+                if (Array.isArray(child.material)) {
+                  child.material[index] = mat;
+                } else {
+                  child.material = mat;
+                }
+              }
+
+              const original = child.userData.__fgidOriginalMaterials[index] || {
+                transparent: false,
+                opacity: 1.0,
+                depthWrite: true
+              };
+
+              if (opacity >= 0.999) {
+                mat.transparent = original.transparent;
+                mat.opacity = original.opacity;
+                mat.depthWrite = original.depthWrite;
+              } else {
+                mat.transparent = true;
+                mat.opacity = opacity;
+                mat.depthWrite = false;
+              }
+              mat.needsUpdate = true;
+            });
+          });
+        }
+
+        const tagStates = new Map(Object.entries(FGID_META.layers).map(([k,v])=>[k,v.visible?0:2]));
+        let selectedScene = 0;
+
+        function applyTagStates() {
+          // Tag opacity is always computed on the source material before view styling.
+          if (root) root.traverse(object => {
+            if (!object.isMesh) return;
+            if (!renderSources.has(object)) renderSources.set(object, object.material);
+            object.material = renderSources.get(object);
+            if (!sceneBaseMaterials.has(object)) sceneBaseMaterials.set(object, object.material);
+          });
+          for(const top of [root,...annotationRoots]) if(top)top.traverse(o=>{
+            const tags=o.userData.fgid_tags;
+            const mask=o.userData.fgid_hidden_in;
+            const hidden=mask?.includes(selectedScene) || false;
+            if(mask) o.visible=!hidden;
+            if(!tags || !tags.length)return;
+            const states=tags.map(t=>tagStates.get(t)||0);
+            o.visible=!hidden && !states.includes(2);
+            const opacity=states.includes(1)?0.5:1;
+            o.userData.__fgidTagState=states.includes(2)?2:states.includes(1)?1:0;
+            o.traverse(c=>{
+              if(!c.material)return;
+              for(const m of (Array.isArray(c.material)?c.material:[c.material])){
+                if(m.userData.fgidOpacity===undefined)m.userData.fgidOpacity=m.opacity;
+                m.opacity=m.userData.fgidOpacity*opacity;m.transparent=m.opacity<1;m.depthWrite=m.opacity>=1;m.needsUpdate=true;
+              }
+            });
+          });
+          applyRenderMode();
+          annotationOcclusionDirty=true;
+        }
+        function setTagState(tag,state){tagStates.set(tag,state);applyTagStates();}
+
+        function buildTree() {
+          const tree = document.getElementById('tree');
+          tree.innerHTML = '';
+          if (!root) return;
+
+          const grouped = new Map();
+
+          const collectTagObject = obj => {
+            const tags=obj.userData.fgid_tags || (obj.userData.__fgidTopLevelRoot?[obj.userData.__fgidTopLevelTag||'Layer 0']:[]);
+            for(const tag of tags){if(!grouped.has(tag))grouped.set(tag,[]);grouped.get(tag).push(obj);}
+          };
+          root.traverse(collectTagObject);
+          annotationRoots.forEach(collectTagObject);
+
+          if (grouped.size === 0) {
+            const fallback = (root.children || []).filter(c => c.name !== '__edges_30deg__');
+            if (fallback.length) grouped.set('Untagged', fallback);
+          }
+
+          const rootUl = document.createElement('ul');
+
+          const tags = Array.from(grouped.keys()).sort((a, b) =>
+            a.localeCompare(b, undefined, { sensitivity: 'base' })
+          );
+
+          tags.forEach(tag => {
+            const objects = grouped.get(tag);
+
+            const li = document.createElement('li');
+            const row = document.createElement('div');
+            row.className = 'tree-row';
+
+            const eye = document.createElement('button');
+            eye.type = 'button';
+            eye.className = 'eye';
+
+            const refreshEye = () => {
+              const state = (tagStates.get(tag)||0);
+              if (state === 0) {
+                eye.textContent = '👁';
+                eye.title = `Make tag ${tag} transparent`;
+                eye.classList.remove('hidden');
+                eye.style.opacity = '1';
+              } else if (state === 1) {
+                eye.textContent = '◉';
+                eye.title = `Hide tag ${tag}`;
+                eye.classList.remove('hidden');
+                eye.style.opacity = '0.55';
+              } else {
+                eye.textContent = '◌';
+                eye.title = `Show tag ${tag}`;
+                eye.classList.add('hidden');
+                eye.style.opacity = '0.38';
+              }
+            };
+
+            eye.onclick = ev => {
+              ev.stopPropagation();
+              const current = (tagStates.get(tag)||0);
+              const next = (current + 1) % 3;
+              setTagState(tag, next);
+              refreshEye();
+            };
+
+            const label = document.createElement('span');
+            label.className = 'tree-label';
+            label.textContent = tag;
+            label.title = tag;
+
+            row.appendChild(eye);
+            row.appendChild(label);
+            li.appendChild(row);
+            rootUl.appendChild(li);
+
+            refreshEye();
+          });
+
+          if (pointCloud) {
+            const cloudLi = document.createElement('li');
+            const cloudRow = document.createElement('div');
+            cloudRow.className = 'tree-row';
+
+            const cloudEye = document.createElement('button');
+            cloudEye.type = 'button';
+            cloudEye.className = 'eye';
+            cloudEye.textContent = pointCloud.visible ? '👁' : '◌';
+            cloudEye.title = pointCloud.visible ? 'Hide point cloud' : 'Show point cloud';
+            cloudEye.classList.toggle('hidden', !pointCloud.visible);
+
+            cloudEye.onclick = ev => {
+              ev.stopPropagation();
+              setPointCloudVisible(!pointCloud.visible);
+              cloudEye.textContent = pointCloud.visible ? '👁' : '◌';
+              cloudEye.title = pointCloud.visible ? 'Hide point cloud' : 'Show point cloud';
+              cloudEye.classList.toggle('hidden', !pointCloud.visible);
+            };
+
+            const cloudLabel = document.createElement('span');
+            cloudLabel.className = 'tree-label';
+            cloudLabel.textContent = pointCloud.name || 'Point Cloud';
+            cloudLabel.title = cloudLabel.textContent;
+
+            cloudRow.appendChild(cloudEye);
+            cloudRow.appendChild(cloudLabel);
+            cloudLi.appendChild(cloudRow);
+            rootUl.appendChild(cloudLi);
+          }
+
+          tree.appendChild(rootUl);
+        }
+
+        function selectObject(obj) {
+          if (selected && selected.material && selected.userData.__oldEmissive) {
+            const mats = Array.isArray(selected.material) ? selected.material : [selected.material];
+            mats.forEach((m, i) => { if (m.emissive) m.emissive.copy(selected.userData.__oldEmissive[i]); });
+          }
+          selected = obj.isMesh ? obj : null;
+          if (!selected) obj.traverse(c => { if (!selected && c.isMesh) selected = c; });
+          if (selected && selected.material) {
+            const mats = Array.isArray(selected.material) ? selected.material : [selected.material];
+            selected.userData.__oldEmissive = mats.map(m => m.emissive ? m.emissive.clone() : new THREE.Color(0x000000));
+            mats.forEach(m => { if (m.emissive) m.emissive.setHex(0x224466); });
+          }
+        }
+
+        function focusLeaderAnnotation(annotation) {
+          if (!annotation || !Array.isArray(annotation.anchor) || !Array.isArray(annotation.text_position)) return;
+          const anchor = new THREE.Vector3().fromArray(annotation.anchor);
+          const textPos = new THREE.Vector3().fromArray(annotation.text_position);
+          const center = anchor.clone().add(textPos).multiplyScalar(0.5);
+          const span = Math.max(anchor.distanceTo(textPos), 0.001);
+          const modelMetrics = getModelMetrics();
+          const focusRadius = Math.max(span * 0.70, modelMetrics.radius * 0.018, 0.10);
+
+          let dir = camera.position.clone().sub(controls.target);
+          if (!isFinite(dir.x) || dir.lengthSq() < 1e-12) dir.set(1, 1, 1);
+          dir.normalize();
+
+          let distance;
+          if (parallelMode) {
+            ensureOrthographicCamera(focusRadius);
+            distance = Math.max(focusRadius * 3.0, 1.0);
+          } else {
+            ensurePerspectiveCamera(camera.isPerspectiveCamera ? camera.fov : 45);
+            distance = distanceToFrame(focusRadius, camera.fov);
+          }
+
+          camera.position.copy(center).add(dir.multiplyScalar(distance));
+          controls.target.copy(center);
+          controls.minDistance = Math.max(focusRadius * 0.02, 0.001);
+          controls.maxDistance = Math.max(modelMetrics.radius * 100, distance * 20);
+          camera.near = Math.max(focusRadius / 1000, 0.001);
+          camera.far = Math.max(modelMetrics.radius * 100, distance * 20, 100);
+          camera.lookAt(center);
+          camera.updateProjectionMatrix();
+          controls.update();
+          annotationOcclusionDirty = true;
+        }
+
+        function buildAnnotationsPanel() {
+          const panel = document.getElementById('annotationsPanel');
+          panel.innerHTML = '';
+          const title = document.createElement('div');
+          title.className = 'ann-title';
+          title.textContent = 'Annotations';
+          panel.appendChild(title);
+
+          const leaders = (ANNOTATIONS || []).filter(a => a && (a.type === 'text' || a.type === 'dimension_linear'));
+          if (!leaders.length) {
+            const empty = document.createElement('div');
+            empty.className = 'ann-empty';
+            empty.textContent = 'No annotations';
+            panel.appendChild(empty);
+            return;
+          }
+
+          leaders.forEach((annotation, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'ann-item';
+            const clean = String(annotation.text || '').replace(/\s+/g, ' ').trim();
+            button.textContent = clean || `Leader ${index + 1}`;
+            button.title = clean || `Leader ${index + 1}`;
+            button.addEventListener('click', () => focusLeaderAnnotation(annotation));
+            panel.appendChild(button);
+          });
+        }
+
+        let sceneCutMaterials = [];
+        const cutContours = [];
+
+        function addCutContour(mesh, worldPlane, otherPlanes) {
+          const geometry = mesh.geometry;
+          const position = geometry.getAttribute('position');
+          if (!position) return;
+          const plane = worldPlane.clone().applyMatrix4(mesh.matrixWorld.clone().invert());
+          if (!geometry.boundingBox) geometry.computeBoundingBox();
+          if (!geometry.boundingBox.intersectsPlane(plane)) return;
+
+          const index = geometry.getIndex();
+          const count = index ? index.count : position.count;
+          const vertices = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+          const distances = [0, 0, 0];
+          const endpoints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+          const segments = [];
+          const epsilon = 1e-7;
+          for (let i = 0; i + 2 < count; i += 3) {
+            for (let j = 0; j < 3; j++) {
+              vertices[j].fromBufferAttribute(position, index ? index.getX(i+j) : i+j);
+              const distance = plane.distanceToPoint(vertices[j]);
+              distances[j] = Math.abs(distance) <= epsilon ? 0 : distance;
+            }
+            if (distances.every(d => d === 0) || distances.every(d => d > 0) ||
+                distances.every(d => d < 0)) continue;
+            let hits = 0;
+            for (let j = 0; j < 3; j++) {
+              const k = (j + 1) % 3;
+              const a = distances[j], b = distances[k];
+              if (a === 0) endpoints[hits++].copy(vertices[j]);
+              else if (a * b < 0) endpoints[hits++].lerpVectors(vertices[j], vertices[k], a / (a-b));
+            }
+            if (hits === 2 && endpoints[0].distanceToSquared(endpoints[1]) > epsilon ** 2) {
+              for (let j = 0; j < 2; j++) {
+                segments.push(endpoints[j].x, endpoints[j].y, endpoints[j].z);
+              }
+            }
+          }
+          if (!segments.length) return;
+          const contourGeometry = new THREE.BufferGeometry();
+          contourGeometry.setAttribute('position', new THREE.Float32BufferAttribute(segments, 3));
+          const material = new THREE.LineBasicMaterial({
+            color: 0xff1717, toneMapped: false, depthWrite: false, clippingPlanes: otherPlanes
+          });
+          const contour = new THREE.LineSegments(contourGeometry, material);
+          contour.renderOrder = 3;
+          mesh.add(contour);
+          cutContours.push(contour);
+        }
+
+        const sceneBaseMaterials = new WeakMap();
+        function applySceneCuts(cuts) {
+          for (const contour of cutContours) {
+            contour.removeFromParent();
+            contour.geometry.dispose();
+            contour.material.dispose();
+          }
+          cutContours.length = 0;
+          renderer.localClippingEnabled = true;
+          root.updateMatrixWorld(true);
+          const scopes = new Map();
+          const global = [];
+          const byContext = new Map();
+          for (const cut of cuts) {
+            const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+              new THREE.Vector3().fromArray(cut.normal).negate(),
+              new THREE.Vector3().fromArray(cut.point)
+            );
+            if (!cut.context) global.push(plane);
+            else {
+              if (!byContext.has(cut.context)) byContext.set(cut.context, []);
+              byContext.get(cut.context).push(plane);
+            }
+          }
+          root.traverse(object => {
+            const {fgid_scope: uid, fgid_context: context} = object.userData;
+            if (uid != null) scopes.set(uid, object);
+            object.userData.scenePlanes = (byContext.get(context) || []).map(
+              plane => plane.clone().applyMatrix4(object.matrixWorld)
+            );
+          });
+          const previousMaterials = sceneCutMaterials;
+          sceneCutMaterials = [];
+          const materialCache = new Map();
+          const contourSources = [];
+          root.traverse(object => {
+            if (!object.material) return;
+            const local = [];
+            let owner = scopes.get(object.userData.fgid_owner) || object;
+            while (owner && owner !== root) {
+              if (owner.userData.scenePlanes?.length) local.push(...owner.userData.scenePlanes);
+              owner = owner.parent;
+            }
+            const planes = [...global, ...local];
+            if (object.isMesh && planes.length) contourSources.push([object, planes]);
+            if (!sceneBaseMaterials.has(object)) sceneBaseMaterials.set(object, object.material);
+            const source = sceneBaseMaterials.get(object);
+            if (!planes.length) object.material = source;
+            else {
+              const key = source.uuid + JSON.stringify(planes.map(p => [...p.normal.toArray(), p.constant]));
+              if (!materialCache.has(key)) {
+                const clipped = source.clone();
+                clipped.clippingPlanes = planes;
+                materialCache.set(key, clipped);
+                sceneCutMaterials.push(clipped);
+              }
+              object.material = materialCache.get(key);
+            }
+          });
+          previousMaterials.forEach(material => material.dispose());
+          for (const [mesh, planes] of contourSources) {
+            planes.forEach((plane, index) => addCutContour(mesh, plane, planes.filter((_, i) => i !== index)));
+          }
+          clearRenderVariants();
+          root.traverse(object => {
+            if (object.isMesh) renderSources.set(object, object.material);
+          });
+          applyTagStates();
+        }
+
+        const toolbar = document.getElementById('toolbar');
+        const toolbarToggle = document.getElementById('toolbarToggle');
+        const toolbarGrip = document.getElementById('toolbarGrip');
+        const compactToolbar = matchMedia('(max-width: 700px), (max-height: 480px)');
+        const viewerPanels = [
+          ['tree', 'btnTree'], ['annotationsPanel', 'btnAnnotations'],
+          ['scenesPanel', 'btnScenes'], ['settings', 'btnSettings']
+        ].map(([id, button]) => [document.getElementById(id), document.getElementById(button)]);
+        let openViewerPanel = null;
+        let toolbarDrag = null;
+
+        function layoutViewerPanel() {
+          if (!openViewerPanel) return;
+          const rect = toolbar.getBoundingClientRect();
+          const below = innerHeight - rect.bottom - 24;
+          const above = rect.top - 24;
+          const placeAbove = below < 160 && above > below;
+          const panel = openViewerPanel;
+          panel.style.top = placeAbove ? 'auto' : Math.min(rect.bottom + 8, innerHeight - 44) + 'px';
+          panel.style.bottom = placeAbove ? (innerHeight - rect.top + 8) + 'px' : 'auto';
+          panel.style.maxHeight = Math.max(32, placeAbove ? above : below) + 'px';
+        }
+
+        function toggleViewerPanel(panelId) {
+          const next = document.getElementById(panelId);
+          openViewerPanel = next === openViewerPanel ? null : next;
+          for (const [panel, button] of viewerPanels) {
+            const open = panel === openViewerPanel;
+            panel.style.display = open ? 'block' : 'none';
+            button.classList.toggle('active', open);
+            button.setAttribute('aria-expanded', String(open));
+          }
+          layoutViewerPanel();
+        }
+
+        function positionToolbar(left, top) {
+          const rect = toolbar.getBoundingClientRect();
+          toolbar.style.left = Math.max(12, Math.min(left, innerWidth - rect.width - 12)) + 'px';
+          toolbar.style.top = Math.max(12, Math.min(top, innerHeight - rect.height - 12)) + 'px';
+          layoutViewerPanel();
+        }
+
+        function fitToolbar() {
+          if (compactToolbar.matches) {
+            const rect = toolbar.getBoundingClientRect();
+            positionToolbar(rect.left, rect.top);
+          } else {
+            toolbar.style.left = '';
+            toolbar.style.top = '';
+            layoutViewerPanel();
+          }
+        }
+
+        toolbarToggle.onclick = () => {
+          const collapsed = toolbar.classList.toggle('collapsed');
+          toolbarToggle.setAttribute('aria-expanded', String(!collapsed));
+          if (collapsed && openViewerPanel) toggleViewerPanel(null);
+          fitToolbar();
+        };
+        toolbarGrip.addEventListener('pointerdown', event => {
+          if (toolbarDrag || event.button !== 0) return;
+          const rect = toolbar.getBoundingClientRect();
+          toolbarDrag = { id: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top };
+          toolbarGrip.setPointerCapture(event.pointerId);
+          event.preventDefault();
+        });
+        toolbarGrip.addEventListener('pointermove', event => {
+          if (toolbarDrag?.id === event.pointerId) {
+            positionToolbar(event.clientX - toolbarDrag.x, event.clientY - toolbarDrag.y);
+          }
+        });
+        toolbarGrip.addEventListener('lostpointercapture', () => { toolbarDrag = null; });
+        window.addEventListener('resize', fitToolbar);
+        new ResizeObserver(fitToolbar).observe(toolbar);
+
+        document.addEventListener('pointerdown', event => {
+          if (!openViewerPanel || openViewerPanel.contains(event.target) ||
+              toolbarGrip.contains(event.target) || toolbarToggle.contains(event.target) ||
+              viewerPanels.some(([, button]) => button.contains(event.target))) return;
+          toggleViewerPanel(null);
+          if (event.target === renderer.domElement) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }, true);
+        document.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && openViewerPanel) toggleViewerPanel(null);
+        });
+
+        let sceneFlight = null;
+        function cancelSceneFlight() {
+          if (!sceneFlight) return;
+          controls.autoRotate = sceneFlight.spin;
+          sceneFlight = null;
+        }
+        renderer.domElement.addEventListener('pointerdown', cancelSceneFlight, true);
+        renderer.domElement.addEventListener('wheel', cancelSceneFlight, true);
+        toolbar.addEventListener('click', cancelSceneFlight, true);
+
+        function advanceSceneFlight(now) {
+          if (!sceneFlight) return;
+          const flight = sceneFlight;
+          const time = THREE.MathUtils.clamp((now - flight.start) / 2000, 0, 1);
+          const blend = time * time * (3 - 2 * time);
+          // Move the eye directly. A saved orbit pivot is only used for navigation.
+          camera.position.lerpVectors(flight.fromEye, flight.eye, blend);
+          camera.quaternion.slerpQuaternions(flight.fromOrientation, flight.orientation, blend);
+          controls.target.set(0, 0, -THREE.MathUtils.lerp(flight.fromDistance, flight.distance, blend))
+            .applyQuaternion(camera.quaternion).add(camera.position);
+          annotationOcclusionDirty = true;
+          if (time === 1) {
+            controls.target.copy(flight.target);
+            cancelSceneFlight();
+          }
+        }
+
+        function setupScenes() {
+          const records = FGID_META.scenes;
+          if (!records.length) return;
+          const button = document.getElementById('btnScenes');
+          const panel = document.getElementById('scenesPanel');
+          const items = records.map((record, index) => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.textContent = record.name;
+            item.title = record.name;
+            item.onclick = () => recall(index);
+            return item;
+          });
+          for (const index of FGID_META.sceneMenuOrder) panel.appendChild(items[index]);
+          const initialCamera = {
+            eye: camera.position.toArray(), target: controls.target.toArray(),
+            up: camera.up.toArray(), fov: camera.fov, parallel: false
+          };
+          function recall(index, animateCamera = true, moveCamera = true) {
+            selectedScene = index;
+            items.forEach((item, itemIndex) => {
+              item.classList.toggle('active', index === itemIndex);
+              item.setAttribute('aria-pressed', String(index === itemIndex));
+            });
+            const record = records[index];
+            if (!index || record.hiddenLayers) {
+              const hidden = new Set(record.hiddenLayers);
+              for (const [name, layer] of Object.entries(FGID_META.layers)) {
+                tagStates.set(name, (index ? hidden.has(name) : !layer.visible) ? 2 : 0);
+              }
+            }
+            applyTagStates();
+            if (record.cloud) applyPointCloudScene(record.cloud);
+            buildTree();
+            if (record.cuts) applySceneCuts(record.cuts);
+            if (!index) setTheme(DARK_DEFAULT);
+            if (record.background) {
+              scene.background.setRGB(...record.background, THREE.SRGBColorSpace);
+            }
+            if (!index || typeof record.edges === 'boolean') {
+              setEdgesVisible(index ? record.edges : EDGES_DEFAULT);
+            }
+            const view = index ? record.camera : record.camera || initialCamera;
+            if (!view || !moveCamera) return;
+            cancelSceneFlight();
+            const fromEye = camera.position.clone();
+            const fromTarget = controls.target.clone();
+            const fromOrientation = camera.quaternion.clone();
+            const eye = new THREE.Vector3().fromArray(view.eye);
+            const target = new THREE.Vector3().fromArray(view.target);
+            parallelMode = view.parallel;
+            if (parallelMode) {
+              ensureOrthographicCamera(view.halfHeight / 1.25);
+              camera.zoom = 1;
+            } else {
+              ensurePerspectiveCamera(view.fov);
+            }
+            camera.up.fromArray(view.up);
+            // OrbitControls caches the camera's up direction at construction.
+            const spin = controls.autoRotate;
+            controls.dispose();
+            controls = new OrbitControls(camera, renderer.domElement);
+            configureControls();
+            controls.autoRotate = false;
+            controls.target.copy(target);
+            camera.position.copy(eye);
+            controls.maxDistance = Math.max(controls.maxDistance, eye.distanceTo(target) * 2);
+            camera.lookAt(target);
+            updateClipFromModel();
+            camera.far = Math.max(camera.far, eye.distanceTo(target) * 2);
+            camera.updateProjectionMatrix();
+            controls.update();
+            if (spin) {
+              const rect = renderer.domElement.getBoundingClientRect();
+              controls.orbitPivot = pickOrbitPivot(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            }
+            controls.autoRotate = spin;
+            const fromDistance = fromEye.distanceTo(fromTarget);
+            const distance = eye.distanceTo(target);
+            const orientation = camera.quaternion.clone();
+            if (animateCamera && !matchMedia('(prefers-reduced-motion: reduce)').matches &&
+                fromDistance > 1e-6 && distance > 1e-6 &&
+                (fromEye.distanceToSquared(eye) > 1e-12 || fromOrientation.angleTo(orientation) > 1e-6)) {
+              sceneFlight = {
+                start: performance.now(), spin, fromEye, eye, target, fromOrientation, orientation,
+                fromDistance, distance
+              };
+              controls.autoRotate = false;
+              advanceSceneFlight(sceneFlight.start);
+            }
+            const projection = document.getElementById('btnProjection');
+            projection.textContent = parallelMode ? 'Perspective view' : 'Parallel view';
+            projection.classList.toggle('active', parallelMode);
+          }
+          button.onclick = () => toggleViewerPanel('scenesPanel');
+          button.hidden = false;
+          const order = FGID_META.sceneMenuOrder;
+          const defaultScene = order.includes(0) ? 0 : order[0];
+          recall(0, false);
+          if (defaultScene !== 0) {
+            recall(defaultScene, false);
+            document.getElementById('btnDefaultView').onclick = () => {
+              recall(0, false, false);
+              recall(defaultScene);
+            };
+          }
+        }
+
+        function loadModel(glb) {
+            root = parseEmbeddedGLB(glb);
+            root.name = root.name || '@@escape_js(title)@@';
+            cleanSpecialNodeNames(root);
+            normalizeMaterials(root);
+            scene.add(root);
+            modelOccluders=[];
+            root.traverse(c=>{ if(c.isMesh) modelOccluders.push(c); });
+            buildAnnotations();
+            buildAnnotationsPanel();
+            annotationOcclusionDirty=true;
+            loadEmbeddedPointCloud();
+            configureCloudScenes();
+            for(const e of FGID_META.loose){
+              const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(e.positions,3));
+              const tag=e.tags[e.tags.length-1];const col=FGID_META.layers[tag]?.color;
+              const m=new THREE.LineBasicMaterial({color:FGID_META.looseMode==='Tags'&&col?new THREE.Color(...col):(DARK_DEFAULT?0xffffff:0x000000)});
+              const o=new THREE.LineSegments(g,m);o.userData.fgid_tags=e.tags;o.userData.fgid_hidden_in=e.hiddenIn;o.userData.fgid_owner=e.scope;o.userData.fgidLoose=true;root.add(o);
+            }
+            addEdges(root);
+            setEdgesVisible(EDGES_DEFAULT);
+            document.getElementById('chkEdgesDefault').checked = EDGES_DEFAULT;
+            applyTagStates();
+            document.getElementById('status').textContent=`${modelOccluders.length} meshes · ${Object.keys(FGID_META.layers).length} Tags`;
+            buildTree();
+            applyDefaultModelCamera();
+            setupScenes();
+          setEdgesVisible(EDGES_DEFAULT);
+        }
+
+        document.getElementById('renderMode').onchange = event => {
+          renderMode = event.currentTarget.value;
+          applyRenderMode();
+        };
+        document.getElementById('btnEdges').onclick = () => setEdgesVisible(!edgesVisible);
+        document.getElementById('btnSpin').onclick = e => { controls.autoRotate = !controls.autoRotate;
+          if (controls.autoRotate) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            controls.orbitPivot = pickOrbitPivot(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          }
+          controls.autoRotateSpeed = 2.0; e.currentTarget.classList.toggle('active', controls.autoRotate); };
+        document.getElementById('btnTree').onclick = () => toggleViewerPanel('tree');
+        document.getElementById('btnAnnotations').onclick = () => toggleViewerPanel('annotationsPanel');
+        document.getElementById('btnPointCloud').onclick = () => {
+          if (pointCloud) setPointCloudVisible(!pointCloud.visible);
+        };
+        function setTheme(isDark) {
+          if(root)root.traverse(o=>{if(o.userData.fgidLoose && FGID_META.looseMode!=='Tags')o.material.color.set(isDark?0xffffff:0x000000);});
+          darkMode = isDark;
+          document.body.classList.toggle('dark', darkMode);
+          scene.background.setHex(darkMode ? DARK_BACKGROUND : LIGHT_BACKGROUND);
+
+          // White edges in dark mode, black edges in light mode.
+          const edgeColor = darkMode ? 0xffffff : 0x111111;
+          edgeObjects.forEach(edges => {
+            if (edges.material && edges.material.color) {
+              edges.material.color.setHex(edgeColor);
+              edges.material.needsUpdate = true;
+            }
+          });
+
+          const button = document.getElementById('btnTheme');
+          button.textContent = darkMode ? 'Light mode' : 'Dark mode';
+          button.classList.toggle('active', darkMode);
+          applyRenderMode();
+        }
+
+        document.getElementById('btnTheme').onclick = () => setTheme(!darkMode);
+        document.getElementById('btnProjection').onclick = () => setProjectionMode(!parallelMode);
+        document.getElementById('btnSettings').onclick = () => toggleViewerPanel('settings');
+        document.getElementById('chkEdgesDefault').onchange = e => setEdgesVisible(e.currentTarget.checked);
+        document.getElementById('plyPointSize').onchange = e => {
+          if (!pointCloud || !pointCloud.material) return;
+          const size = FGID_META.cloud
+            ? Math.max(1, Math.min(12, Number(e.currentTarget.value) || 2))
+            : Math.max(0.0005, Math.min(1.0, Number(e.currentTarget.value) || Number(PLY_POINT_SIZE_DEFAULT) || 0.015));
+          e.currentTarget.value = size;
+          pointCloud.material.size = size;
+          pointCloud.material.needsUpdate = true;
+        };
+        ['plyTx','plyTy','plyTz','plyRx','plyRy','plyRz','plyScale'].forEach(id => {
+          document.getElementById(id).oninput = applyExtraPointCloudTransform;
+        });
+        document.getElementById('btnResetPlyTransform').onclick = () => {
+          ['plyTx','plyTy','plyTz','plyRx','plyRy','plyRz'].forEach(id => document.getElementById(id).value = 0);
+          document.getElementById('plyScale').value = 1;
+          applyExtraPointCloudTransform();
+        };
+        document.getElementById('btnDefaultView').onclick = () => applyDefaultModelCamera();
+        document.getElementById('btnIso').onclick = () => fitView(new THREE.Vector3(1, 1, 1));
+        document.getElementById('btnFront').onclick = () => fitView(new THREE.Vector3(0, 0, 1));
+        for(const [id,v] of Object.entries({btnBottom:[0,-1,0],btnBack:[0,0,-1],btnLeft:[-1,0,0],btnRight:[1,0,0]}))document.getElementById(id).onclick=()=>fitView(new THREE.Vector3(...v));
+        document.getElementById('btnTop').onclick = () => fitView(new THREE.Vector3(0, 1, 0));
+        document.getElementById('btnFit').onclick = () => fitView();
+
+        function hitIsVisible(hit) {
+          for (let object = hit.object; object; object = object.parent) {
+            if (!object.visible) return false;
+          }
+          return !(hit.object.material.clippingPlanes || []).some(
+            plane => plane.distanceToPoint(hit.point) < -1e-6
+          );
+        }
+
+        renderer.domElement.addEventListener('dblclick', event => {
+          if (!root) return;
+          const rect = renderer.domElement.getBoundingClientRect();
+          mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.setFromCamera(mouse, camera);
+          const meshes = []; root.traverse(c => { if (c.isMesh) meshes.push(c); });
+          const hits = raycaster.intersectObjects(meshes, true);
+          const hit = hits.find(hitIsVisible);
+          if (hit) selectObject(hit.object);
+        });
+
+
+        window.addEventListener('resize', () => {
+          const aspect = window.innerWidth / window.innerHeight;
+          if (camera.isPerspectiveCamera) {
+            camera.aspect = aspect;
+          } else if (camera.isOrthographicCamera) {
+            const halfHeight = Math.max((camera.top - camera.bottom) * 0.5, 0.001);
+            camera.left = -halfHeight * aspect;
+            camera.right = halfHeight * aspect;
+          }
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+          annotationOcclusionDirty = true;
+        });
+
+        function animate(now = performance.now()) {
+          requestAnimationFrame(animate);
+          if (sceneFlight) advanceSceneFlight(now);
+          else controls.update();
+          if(annotationOcclusionDirty) updateAnnotationOcclusion();
+          renderer.render(scene, camera);
+        }
+        setTheme(DARK_DEFAULT);
+        const loading = document.getElementById('loading');
+        function progress(percent, message) {
+          document.getElementById('loading-ring').setAttribute('aria-valuenow', percent);
+          document.getElementById('loading-percent').textContent = percent + ' %';
+          document.getElementById('loading-progress').style.strokeDashoffset = 100 - percent;
+          if (message) document.getElementById('loading-message').textContent = message;
+        }
+
+        // Let the browser paint the progress screen before CPU-heavy steps.
+        const paintProgress = () => new Promise(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve))
+        );
+
+        async function readModel() {
+          if (!('DecompressionStream' in window)) {
+            throw new Error('Ce navigateur ne prend pas en charge la décompression gzip.');
+          }
+          const stream = new Blob([b64ToArrayBuffer(EMBEDDED_GLB_BASE64)]).stream()
+            .pipeThrough(new DecompressionStream('gzip'));
+          const reader = stream.getReader();
+          const result = new Uint8Array(GLB_BYTES);
+          let offset = 0;
+          let displayed = 0;
+          for (;;) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            result.set(value, offset);
+            offset += value.byteLength;
+            const percent = Math.floor(90 * offset / GLB_BYTES);
+            if (percent >= displayed + 5) {
+              progress(percent);
+              displayed = percent;
+            }
+          }
+          if (offset !== GLB_BYTES) throw new Error('Les données du modèle sont incomplètes.');
+          return result.buffer;
+        }
+
+        async function startViewer() {
+          await paintProgress();
+          const glb = await readModel();
+          progress(90, 'Préparation du modèle…');
+          await paintProgress();
+          loadModel(glb);
+          progress(98, 'Premier affichage…');
+          await paintProgress();
+          animate();
+          progress(100);
+          loading.hidden = true;
+        const gpuExt=renderer.getContext().getExtension('WEBGL_debug_renderer_info');
+        document.getElementById('status').title=gpuExt?renderer.getContext().getParameter(gpuExt.UNMASKED_RENDERER_WEBGL):'WebGL renderer';
+        window.HTML3D_DIAGNOSTICS={meshes:modelOccluders.length,triangles:renderer.info.render.triangles,tags:[...tagStates.keys()],offline:true};
+        }
+
+        startViewer().catch(error => {
+          console.error(error);
+          document.getElementById('loading-ring').hidden = true;
+          document.getElementById('loading-message').textContent =
+            'Impossible de charger le modèle. ' + error.message;
+        });
+      </script>
+    </body>
+    </html>
